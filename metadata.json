@@ -1,6 +1,6 @@
 {
   "name": "Neuro SAN Visual Designer",
-  "description": "Visual DAG-based agent network designer and execution platform for Neuro SAN Studio.",
+  "description": "Visual DAG-based agent network designer and monitoring platform for Neuro SAN Studio.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

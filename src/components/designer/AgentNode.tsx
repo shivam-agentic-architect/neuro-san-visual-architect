@@ -43,7 +43,11 @@ const AgentNodeComponent = ({ data, selected }: NodeProps<AgentNode>) => {
           <span className="text-[10px] font-bold text-white">!</span>
         </div>
       )}
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-500 border-2 border-white" />
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        className="w-4 h-4 bg-indigo-500 border-2 border-white hover:scale-125 transition-transform" 
+      />
       
       <div className="flex items-center gap-3">
         <div className={cn(
@@ -58,7 +62,11 @@ const AgentNodeComponent = ({ data, selected }: NodeProps<AgentNode>) => {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-indigo-500 border-2 border-white" />
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        className="w-4 h-4 bg-indigo-500 border-2 border-white hover:scale-125 transition-transform" 
+      />
     </div>
   );
 };

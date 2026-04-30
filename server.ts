@@ -97,31 +97,47 @@ async function startServer() {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      return res.json({ suggestions: [] });
+      return res.status(400).json({ 
+        error: "GEMINI_API_KEY is not configured in environment variables.",
+        suggestions: [] 
+      });
     }
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use 1.5 flash for speed/reliability
       
       const promptText = `
-        Neuro SAN Agent Network Architect.
-        Given these agents:
-        ${nodes.map((n: any) => `- ${n.id} (${n.data.type}): ${n.data.label} - ${n.data.prompt}`).join('\n')}
+        As an Agent Network Architect for the Neuro SAN platform, your task is to design logical connections (DAG edges) between autonomous agents.
         
-        Suggest logical connections (DAG edges) between them.
-        Return ONLY a JSON array of objects: [{"source": "id1", "target": "id2"}].
-        No other text.
+        Neuro SAN Protocol Rules:
+        1. Router nodes (Orchestrators) typically connect to Worker nodes.
+        2. Workers can connect to other Workers for sequential processing.
+        3. DAGs should generally flow from source to sink.
+
+        Available Agents:
+        ${nodes.map((n: any) => `- ID: "${n.id}", Type: "${n.data.type}", Name: "${n.data.label}", Role: "${n.data.prompt}"`).join('\n')}
+        
+        Output only a JSON array of missing logical edges. If a connection already logically exists or nodes are disconnected, suggest the flow.
+        Return ONLY valid JSON in format: [{"source": "id1", "target": "id2"}].
+        Do not include existing connections.
+        Do not include markdown or explanations.
       `;
 
       const result = await model.generateContent(promptText);
       const text = result.response.text();
-      const cleanJson = text.replace(/```json|```/g, '').trim();
-      const suggestions = JSON.parse(cleanJson);
+      
+      // Robust JSON extraction
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return res.json({ suggestions: [] });
+      }
+      
+      const suggestions = JSON.parse(jsonMatch[0]);
       res.json({ suggestions });
     } catch (error) {
-      console.error("AI Error:", error);
-      res.json({ suggestions: [] });
+      console.error("AI Architect Error:", error);
+      res.status(500).json({ error: "Internal AI processing error", suggestions: [] });
     }
   });
 

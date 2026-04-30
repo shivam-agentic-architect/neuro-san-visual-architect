@@ -37,26 +37,19 @@ const initialNodes: AgentNodeInterface[] = [
   {
     id: 'router-1',
     type: 'agent',
-    position: { x: 250, y: 50 },
-    data: { label: 'Orchestrator', type: 'router', prompt: 'You are the central orchestrator of the Neuro SAN network.' },
+    position: { x: 250, y: 100 },
+    data: { label: 'Orchestrator', type: 'router', prompt: 'Coordinate the agent swarm and manage high-level task delegation.' },
   },
   {
     id: 'worker-1',
     type: 'agent',
-    position: { x: 100, y: 200 },
-    data: { label: 'Data Extractor', type: 'worker', prompt: 'Extract technical requirements from user query.' },
-  },
-  {
-    id: 'worker-2',
-    type: 'agent',
-    position: { x: 400, y: 200 },
-    data: { label: 'Code Gen', type: 'worker', prompt: 'Generate TypeScript code based on requirements.' },
+    position: { x: 250, y: 300 },
+    data: { label: 'Research Agent', type: 'worker', prompt: 'Search the web and extract relevant information for the given query.' },
   },
 ];
 
 const initialEdges: Edge[] = [
   { id: 'e-r1-w1', source: 'router-1', target: 'worker-1', animated: true },
-  { id: 'e-r1-w2', source: 'router-1', target: 'worker-2', animated: true },
 ];
 
 const DesignerDashboard = () => {
@@ -65,7 +58,9 @@ const DesignerDashboard = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [currentView, setCurrentView] = useState<'designer' | 'monitoring'>('designer');
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (scrollRef.current) {
@@ -128,7 +123,12 @@ const DesignerDashboard = () => {
       id,
       type: 'agent',
       position: { x: Math.random() * 400, y: Math.random() * 400 },
-      data: { label: `New ${type}`, type, prompt: '', errors: ['Agent name is required', 'System prompt is required'] },
+      data: { 
+        label: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`, 
+        type, 
+        prompt: `System prompt for ${type}...`,
+        status: 'idle'
+      },
     };
     setNodes((nds) => nds.concat(newNode));
   };
@@ -211,8 +211,10 @@ const DesignerDashboard = () => {
           return newEdges;
         });
         setLogs(prev => [...prev, `AI: Suggested ${suggestions.length} new connections.`]);
+      } else if (data.error) {
+        setLogs(prev => [...prev, `AI ERROR: ${data.error}`]);
       } else {
-        setLogs(prev => [...prev, "AI: No new connections suggested. (Check GEMINI_API_KEY)"]);
+        setLogs(prev => [...prev, "AI: No new connections suggested based on current roles."]);
       }
     } catch (err) {
       setLogs(prev => [...prev, "AI: Error communicating with brain."]);
@@ -221,19 +223,38 @@ const DesignerDashboard = () => {
     }
   };
 
-  const handleImport = async () => {
-    // Simulate file picking
-    const hocon = `agents { demo { label = "Demo" } }`;
-    const response = await fetch('/api/designer/load-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hocon }),
-    });
-    const data = await response.json();
-    setNodes(data.nodes);
-    setEdges(data.edges);
-    setLogs(prev => [...prev, "HOCON: Imported network successfully."]);
+  const handleImport = () => {
+    fileInputRef.current?.click();
   };
+
+  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const hocon = event.target?.result as string;
+      setLogs(prev => [...prev, `HOCON: Reading file ${file.name}...`]);
+
+      try {
+        const response = await fetch('/api/designer/load-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hocon }),
+        });
+        const data = await response.json();
+        setNodes(data.nodes);
+        setEdges(data.edges);
+        setLogs(prev => [...prev, `SUCCESS: Imported ${data.nodes.length} nodes from HOCON.`]);
+      } catch (err) {
+        setLogs(prev => [...prev, "ERROR: Failed to parse HOCON configuration."]);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  };
+
   const exportHOCON = async () => {
     const response = await fetch('/api/designer/generate-config', {
       method: 'POST',
@@ -250,107 +271,195 @@ const DesignerDashboard = () => {
   };
 
   const handleReset = () => {
-    if (window.confirm("Are you sure you want to clear the entire workspace?")) {
-      setNodes([]);
-      setEdges([]);
-      setLogs([]);
+    if (window.confirm("Are you sure you want to reset the workspace to the default template?")) {
+      const defaultNodes: AgentNodeInterface[] = [
+        {
+          id: 'router-main',
+          type: 'agent',
+          position: { x: 250, y: 50 },
+          data: { label: 'Main Orchestrator', type: 'router', prompt: 'Coordinate the workflow.' },
+        },
+        {
+          id: 'worker-primary',
+          type: 'agent',
+          position: { x: 250, y: 200 },
+          data: { label: 'Primary Executor', type: 'worker', prompt: 'Execute tasks delegated by orchestrator.' },
+        },
+      ];
+      const defaultEdges: Edge[] = [
+        { id: 'initial-connection', source: 'router-main', target: 'worker-primary', animated: true }
+      ];
+      setNodes(defaultNodes);
+      setEdges(defaultEdges);
+      setLogs(["Workspace reset to standard AAOSA template."]);
       setSelectedNodeId(null);
     }
   };
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden font-sans text-zinc-100">
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept=".hocon,.conf,.txt"
+        onChange={onFileSelected}
+      />
       {/* Sidebar Nav */}
       <div className="w-16 border-r border-zinc-800 flex flex-col items-center py-6 gap-8 bg-zinc-950">
         <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
           <Layers className="text-white w-6 h-6" />
         </div>
-        <div className="flex flex-col gap-6 text-zinc-600">
-          <Network className="w-6 h-6 hover:text-indigo-400 cursor-pointer transition-colors" />
-          <Activity className="w-6 h-6 hover:text-indigo-400 cursor-pointer transition-colors" />
+        <div className="flex flex-col gap-6">
+          <button 
+            onClick={() => setCurrentView('designer')}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              currentView === 'designer' ? "text-indigo-400 bg-indigo-500/10" : "text-zinc-600 hover:text-zinc-400"
+            )}
+          >
+            <Network className="w-6 h-6" />
+          </button>
+          <button 
+            onClick={() => setCurrentView('monitoring')}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              currentView === 'monitoring' ? "text-indigo-400 bg-indigo-500/10" : "text-zinc-600 hover:text-zinc-400"
+            )}
+          >
+            <Activity className="w-6 h-6" />
+          </button>
         </div>
       </div>
 
       <div className="flex-1 relative">
-        {/* Header toolbar */}
-        <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-10 pointer-events-none">
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-1.5 rounded-2xl flex gap-1 pointer-events-auto shadow-2xl">
-            <button onClick={() => addAgent('router')} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400 transition-all flex items-center gap-2 text-sm font-bold pr-4">
-              <Plus className="w-4 h-4" /> Router
-            </button>
-            <div className="w-[1px] bg-zinc-800 my-2" />
-            <button onClick={() => addAgent('worker')} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400 transition-all flex items-center gap-2 text-sm font-bold pr-4">
-              <Plus className="w-4 h-4" /> Worker
-            </button>
-          </div>
-
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-1.5 rounded-2xl flex gap-1 pointer-events-auto shadow-2xl">
-            <button 
-              onClick={handleAiSuggest} 
-              disabled={isAiLoading}
-              className={cn(
-                "p-2.5 rounded-xl transition-all flex items-center gap-2 text-sm font-bold px-4",
-                isAiLoading ? "opacity-50 cursor-not-allowed bg-zinc-800" : "hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400"
-              )}
-            >
-              <Zap className={cn("w-4 h-4 text-amber-500", isAiLoading && "animate-pulse")} /> 
-              {isAiLoading ? "AI Thinking..." : "AI Auto-Connect"}
-            </button>
-            <div className="w-[1px] bg-zinc-800 my-2" />
-            <button onClick={handleReset} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
-              <RotateCcw className="w-4 h-4" /> Reset
-            </button>
-            <div className="w-[1px] bg-zinc-800 my-2" />
-            <button onClick={exportHOCON} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
-              <Download className="w-4 h-4" /> Export HOCON
-            </button>
-            <button onClick={handleImport} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
-              <Upload className="w-4 h-4" /> Import
-            </button>
-          </div>
-        </div>
-
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          onNodeClick={onNodeClick}
-          fitView
-          colorMode="dark"
-          style={{ background: '#09090b' }}
-        >
-          <Background color="#18181b" variant="dots" gap={20} size={1} />
-          <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-100" />
-          <MiniMap className="bg-zinc-900/80 border border-zinc-800" nodeColor="#3f3f46" maskColor="rgba(0,0,0,0.5)" />
-        </ReactFlow>
-
-        {/* Console / Output */}
-        <div className="absolute bottom-6 left-4 w-96 max-h-48 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 flex flex-col gap-2 overflow-hidden shadow-2xl">
-          <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">
-            <Zap className="w-3 h-3 text-amber-500" /> Execution Console
-          </div>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1 font-mono text-[11px] text-zinc-400 scrollbar-hide">
-            {logs.length === 0 && <p className="italic text-zinc-600">Ready for execution...</p>}
-            {logs.map((log, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="text-zinc-600">[{new Date().toLocaleTimeString([], { hour12: false })}]</span>
-                <span className={cn(log.includes('completed') ? "text-emerald-400" : "text-zinc-300")}>{log}</span>
+        {currentView === 'designer' ? (
+          <>
+            {/* Header toolbar */}
+            <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-10 pointer-events-none">
+              <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-1.5 rounded-2xl flex gap-1 pointer-events-auto shadow-2xl">
+                <button onClick={() => addAgent('router')} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400 transition-all flex items-center gap-2 text-sm font-bold pr-4">
+                  <Plus className="w-4 h-4" /> Router
+                </button>
+                <div className="w-[1px] bg-zinc-800 my-2" />
+                <button onClick={() => addAgent('worker')} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400 transition-all flex items-center gap-2 text-sm font-bold pr-4">
+                  <Plus className="w-4 h-4" /> Worker
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
 
-        <ConfigPanel
-          selectedNode={selectedNode || null}
-          onUpdate={updateNodeData}
-          onDelete={deleteNode}
-          onClose={() => setSelectedNodeId(null)}
-          onRun={handleRun}
-          isExecuting={isExecuting}
-        />
+              <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-1.5 rounded-2xl flex gap-1 pointer-events-auto shadow-2xl">
+                <button 
+                  onClick={handleAiSuggest} 
+                  disabled={isAiLoading}
+                  className={cn(
+                    "p-2.5 rounded-xl transition-all flex items-center gap-2 text-sm font-bold px-4",
+                    isAiLoading ? "opacity-50 cursor-not-allowed bg-zinc-800" : "hover:bg-zinc-800 text-zinc-400 hover:text-indigo-400"
+                  )}
+                >
+                  <Zap className={cn("w-4 h-4 text-amber-500", isAiLoading && "animate-pulse")} /> 
+                  {isAiLoading ? "AI Thinking..." : "AI Auto-Connect"}
+                </button>
+                <div className="w-[1px] bg-zinc-800 my-2" />
+                <button onClick={handleReset} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
+                  <RotateCcw className="w-4 h-4" /> Reset
+                </button>
+                <div className="w-[1px] bg-zinc-800 my-2" />
+                <button onClick={exportHOCON} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
+                  <Download className="w-4 h-4" /> Export HOCON
+                </button>
+                <button onClick={handleImport} className="p-2.5 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition-all flex items-center gap-2 text-sm font-bold px-4">
+                  <Upload className="w-4 h-4" /> Import
+                </button>
+              </div>
+            </div>
+
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              onNodeClick={onNodeClick}
+              fitView
+              colorMode="dark"
+              style={{ background: '#09090b' }}
+            >
+              <Background color="#18181b" variant="dots" gap={20} size={1} />
+              <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-100" />
+              <MiniMap className="bg-zinc-900/80 border border-zinc-800" nodeColor="#3f3f46" maskColor="rgba(0,0,0,0.5)" />
+            </ReactFlow>
+
+            {/* Console / Output - CENTERED */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[500px] max-h-48 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 flex flex-col gap-2 overflow-hidden shadow-2xl z-20">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">
+                <Zap className="w-3 h-3 text-amber-500" /> Execution Console
+              </div>
+              <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-1 font-mono text-[11px] text-zinc-400 scrollbar-hide">
+                {logs.length === 0 && <p className="italic text-zinc-600">Ready for execution...</p>}
+                {logs.map((log, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="text-zinc-600">[{new Date().toLocaleTimeString([], { hour12: false })}]</span>
+                    <span className={cn(log.includes('completed') || log.includes('SUCCESS') ? "text-emerald-400" : log.includes('ERROR') ? "text-rose-400" : "text-zinc-300")}>{log}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <ConfigPanel
+              selectedNode={selectedNode || null}
+              onUpdate={updateNodeData}
+              onDelete={deleteNode}
+              onClose={() => setSelectedNodeId(null)}
+              onRun={handleRun}
+              isExecuting={isExecuting}
+            />
+          </>
+        ) : (
+          <div className="p-12 max-w-4xl mx-auto h-full overflow-y-auto space-y-8">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-black uppercase tracking-tighter text-white">System Monitoring</h1>
+              <p className="text-zinc-400 text-sm">Real-time metrics and activity feed for your Neuro SAN network.</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-6">
+              {[
+                { label: 'Active Agents', value: nodes.length, icon: Layers, color: 'text-indigo-400' },
+                { label: 'Execution Cycles', value: '24', icon: Activity, color: 'text-emerald-400' },
+                { label: 'Token Usage', value: '1.2k', icon: Zap, color: 'text-amber-400' },
+              ].map((stat, i) => (
+                <div key={i} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-1">
+                  <stat.icon className={cn("w-5 h-5", stat.color)} />
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{stat.label}</p>
+                  <p className="text-2xl font-black text-white">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-950/50 flex items-center justify-between">
+                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Full Activity Log</h3>
+                 <button onClick={() => setLogs([])} className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase transition-colors">Clear History</button>
+              </div>
+              <div className="p-6 space-y-3 font-mono text-xs">
+                {logs.length === 0 ? (
+                  <p className="text-zinc-600 italic">No activity recorded yet.</p>
+                ) : (
+                  logs.map((log, i) => (
+                    <div key={i} className="flex gap-4 border-b border-zinc-800/50 pb-2 last:border-0">
+                      <span className="text-zinc-600 shrink-0">{new Date().toLocaleTimeString()}</span>
+                      <span className={cn(
+                        log.includes('ERROR') ? "text-rose-400" : 
+                        log.includes('SUCCESS') ? "text-emerald-400" : 
+                        "text-zinc-300"
+                      )}>{log}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
