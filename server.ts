@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import "dotenv/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,11 +95,13 @@ async function startServer() {
 
   app.post("/api/designer/ai-suggest", async (req, res) => {
     const { nodes } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const rawApiKey = process.env.GEMINI_API_KEY;
+    const apiKey = rawApiKey?.trim();
 
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE" || apiKey.length < 10 || apiKey.startsWith("AIzaSyDKxi")) {
+      console.warn("AI Architect: Invalid/Missing API Key detected in environment.");
       return res.status(400).json({ 
-        error: "GEMINI_API_KEY is not configured in environment variables.",
+        error: "GEMINI_API_KEY is missing or invalid. Please provide your actual Gemini API Key in the AI Studio Secrets menu.",
         suggestions: [] 
       });
     }
@@ -135,8 +138,21 @@ async function startServer() {
       
       const suggestions = JSON.parse(jsonMatch[0]);
       res.json({ suggestions });
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Architect Error:", error);
+      
+      // Specifically handle invalid API key errors
+      const isInvalidKey = error.message?.includes("API key not valid") || 
+                           error.status === 400 ||
+                           error.errorDetails?.some((d: any) => d.reason === 'API_KEY_INVALID');
+
+      if (isInvalidKey) {
+        return res.status(401).json({ 
+          error: "Invalid Gemini API Key. Please ensure your GEMINI_API_KEY is correct in the Secrets menu.",
+          suggestions: [] 
+        });
+      }
+
       res.status(500).json({ error: "Internal AI processing error", suggestions: [] });
     }
   });

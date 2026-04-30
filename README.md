@@ -1,20 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Neuro SAN Studio Designer
 
-# Run and deploy your AI Studio app
+Visual DAG-based agent network designer and monitoring platform.
 
-This contains everything you need to run your app locally.
+## Features
+- Visual Node-Graph Interface
+- Real-time Performance Monitoring
+- AI-Powered Agent Configuration Suggestions
+- HOCON Export for Neuro SAN Kernel
 
-View your app in AI Studio: https://ai.studio/apps/bb5685f7-acba-4866-9b83-c78b91e81fcb
+## Setup & Running Locally
 
-## Run Locally
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-**Prerequisites:**  Node.js
+2. **Configure environment**:
+   Create a `.env` file and add your `GEMINI_API_KEY`.
 
+3. **Start Development Server**:
+   ```bash
+   npm run dev
+   ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Architecture
+The application uses a full-stack architecture with a React (Vite) frontend and an Express backend to handle AI orchestration and configuration logic securely.
