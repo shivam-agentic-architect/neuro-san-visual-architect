@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import "dotenv/config";
+import parseHocon from "hocon-parser";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,19 +79,49 @@ async function startServer() {
 
   app.post("/api/designer/load-config", (req, res) => {
     const { hocon } = req.body;
-    // In a real app, we'd use hocon-parser here. 
-    // Since we're in a demo/prototype environment, we'll simulate the successful parsing 
-    // of a HOCON string into a DAG.
-    
-    const nodes = [
-      { id: 'imported-router', type: 'agent', position: { x: 100, y: 100 }, data: { label: 'Imported Orchestrator', type: 'router', prompt: 'Imported from HOCON' } },
-      { id: 'imported-worker', type: 'agent', position: { x: 300, y: 100 }, data: { label: 'Imported Worker', type: 'worker', prompt: 'Imported from HOCON' } }
-    ];
-    const edges = [
-      { id: 'e-imp-1', source: 'imported-router', target: 'imported-worker' }
-    ];
+    try {
+      const config = parseHocon(hocon);
+      const agents = config.agents || {};
+      const nodes: any[] = [];
+      const edges: any[] = [];
+      
+      const agentIds = Object.keys(agents);
+      
+      agentIds.forEach((id, index) => {
+        const agent = agents[id];
+        const nodeId = id.replace(/_/g, '-');
+        
+        nodes.push({
+          id: nodeId,
+          type: 'agent',
+          position: { x: 100 + (index % 3) * 250, y: 100 + Math.floor(index / 3) * 200 },
+          data: {
+            label: agent.label || id,
+            type: agent.type || 'worker',
+            prompt: agent.prompt || '',
+            status: 'idle',
+            errors: []
+          }
+        });
 
-    res.json({ nodes, edges });
+        if (agent.outputs && Array.isArray(agent.outputs)) {
+          agent.outputs.forEach((target: string) => {
+            const targetId = target.replace(/_/g, '-');
+            edges.push({
+              id: `e-${nodeId}-${targetId}`,
+              source: nodeId,
+              target: targetId,
+              animated: true
+            });
+          });
+        }
+      });
+
+      res.json({ nodes, edges });
+    } catch (err: any) {
+      console.error("HOCON Parse Error:", err);
+      res.status(400).json({ error: "Failed to parse HOCON: " + err.message });
+    }
   });
 
   app.post("/api/designer/ai-suggest", async (req, res) => {

@@ -37,7 +37,7 @@ const initialNodes: AgentNodeInterface[] = [
   {
     id: 'router-1',
     type: 'agent',
-    position: { x: 250, y: 100 },
+    position: { x: 400, y: 100 },
     data: { 
       label: 'Orchestrator', 
       type: 'router', 
@@ -56,10 +56,22 @@ const initialNodes: AgentNodeInterface[] = [
       errors: []
     },
   },
+  {
+    id: 'worker-2',
+    type: 'agent',
+    position: { x: 550, y: 300 },
+    data: { 
+      label: 'Data Processor', 
+      type: 'worker', 
+      prompt: 'Clean and structure the information retrieved by research agents.',
+      errors: []
+    },
+  },
 ];
 
 const initialEdges: Edge[] = [
   { id: 'e-r1-w1', source: 'router-1', target: 'worker-1', animated: true },
+  { id: 'e-r1-w2', source: 'router-1', target: 'worker-2', animated: true },
 ];
 
 const DesignerDashboard = () => {
@@ -363,11 +375,16 @@ const DesignerDashboard = () => {
           body: JSON.stringify({ hocon }),
         });
         const data = await response.json();
-        setNodes(data.nodes);
-        setEdges(data.edges);
-        setLogs(prev => [...prev, `SUCCESS: Imported ${data.nodes.length} nodes from HOCON.`]);
+        
+        if (response.ok) {
+          setNodes(data.nodes);
+          setEdges(data.edges);
+          setLogs(prev => [...prev, `SUCCESS: Imported ${data.nodes.length} nodes from HOCON.`]);
+        } else {
+          setLogs(prev => [...prev, `ERROR: ${data.error || 'Failed to parse configuration.'}`]);
+        }
       } catch (err) {
-        setLogs(prev => [...prev, "ERROR: Failed to parse HOCON configuration."]);
+        setLogs(prev => [...prev, "ERROR: Network failure during HOCON import."]);
       }
     };
     reader.readAsText(file);
@@ -394,11 +411,12 @@ const DesignerDashboard = () => {
     if (window.confirm("Are you sure you want to reset the workspace to the default template?")) {
       const id1 = 'router-' + Math.random().toString(36).substr(2, 9);
       const id2 = 'worker-' + Math.random().toString(36).substr(2, 9);
+      const id3 = 'worker-' + Math.random().toString(36).substr(2, 9);
       const defaultNodes: AgentNodeInterface[] = [
         {
           id: id1,
           type: 'agent',
-          position: { x: 250, y: 100 },
+          position: { x: 400, y: 100 },
           data: { label: 'Orchestrator', type: 'router', prompt: 'Coordinate the agent swarm and manage high-level task delegation.', status: 'idle', errors: [] },
         },
         {
@@ -407,9 +425,16 @@ const DesignerDashboard = () => {
           position: { x: 250, y: 300 },
           data: { label: 'Research Agent', type: 'worker', prompt: 'Search the web and extract relevant information for the given query.', status: 'idle', errors: [] },
         },
+        {
+          id: id3,
+          type: 'agent',
+          position: { x: 550, y: 300 },
+          data: { label: 'Data Processor', type: 'worker', prompt: 'Clean and structure the information retrieved by research agents.', status: 'idle', errors: [] },
+        },
       ];
       const defaultEdges: Edge[] = [
-        { id: `e-${id1}-${id2}`, source: id1, target: id2, animated: true }
+        { id: `e-${id1}-${id2}`, source: id1, target: id2, animated: true },
+        { id: `e-${id1}-${id3}`, source: id1, target: id3, animated: true }
       ];
       setNodes(defaultNodes);
       setEdges(defaultEdges);
